@@ -131,18 +131,18 @@ tenants:
         name: nextcloud-acme-env
         passwordKey: DB_PASSWORD
 
-    s3:
-      enabled: true
-      bucket: acme-nextcloud-data
-      region: eu-west-1
-      endpointURL: ""
-      usePathStyle: false
-      sse: ""
-      uploadPartSize: 52428800
-      credentials:
-        name: nextcloud-acme-env
-        accessKeyKey: OBJECTSTORE_KEY
-        secretAccessKey: OBJECTSTORE_SECRET
+#    s3:
+#      enabled: true
+#      bucket: acme-nextcloud-data
+#      region: eu-west-1
+#      endpointURL: ""
+#      usePathStyle: false
+#      sse: ""
+#      uploadPartSize: 52428800
+#      credentials:
+#        name: nextcloud-acme-env
+#        accessKeyKey: OBJECTSTORE_KEY
+#        secretAccessKey: OBJECTSTORE_SECRET
 
     persistence:
       data:
@@ -221,18 +221,18 @@ tenants:
         name: nextcloud-globex-env
         passwordKey: DB_PASSWORD
 
-    s3:
-      enabled: true
-      bucket: globex-nextcloud-data
-      region: eu-west-1
-      endpointURL: ""
-      usePathStyle: false
-      sse: ""
-      uploadPartSize: 52428800
-      credentials:
-        name: nextcloud-globex-env
-        accessKeyKey: OBJECTSTORE_KEY
-        secretAccessKey: OBJECTSTORE_SECRET
+#    s3:
+#      enabled: true
+#      bucket: globex-nextcloud-data
+#      region: eu-west-1
+#      endpointURL: ""
+#      usePathStyle: false
+#      sse: ""
+#      uploadPartSize: 52428800
+#      credentials:
+#        name: nextcloud-globex-env
+#        accessKeyKey: OBJECTSTORE_KEY
+#        secretAccessKey: OBJECTSTORE_SECRET
 
     persistence:
       data:
