@@ -1,0 +1,121 @@
+{{/*
+=============================================================================
+Tenant CronJobs — one per enabled tenant, running `occ maintenance:cron`
+=============================================================================
+*/}}
+{{- if .Values.cronjob.enabled }}
+{{- range .Values.tenants }}
+{{- if .enabled }}
+{{- $tenant := . }}
+{{- $root := $ }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "nextcloud-%s-cron" $tenant.name | trunc 63 }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+    app.kubernetes.io/component: cronjob
+spec:
+  schedule: {{ $root.Values.cronjob.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 60
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 12 }}
+            app.kubernetes.io/component: cronjob
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "nextcloud.serviceAccountName" $root }}
+          # OpenShift: omit fsGroup/runAsUser; keep only runAsNonRoot
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: cron
+              image: "{{ $root.Values.cronjob.image.repository }}:{{ $root.Values.cronjob.image.tag }}"
+              imagePullPolicy: {{ $root.Values.cronjob.image.pullPolicy }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  php -f /var/www/html/cron.php
+              env:
+                - name: MYSQL_HOST
+                  value: {{ $tenant.database.host | quote }}
+                - name: MYSQL_DATABASE
+                  value: {{ $tenant.database.name | quote }}
+                - name: MYSQL_USER
+                  value: {{ $tenant.database.user | quote }}
+                - name: MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $tenant.database.credentials.name }}
+                      key: {{ $tenant.database.credentials.passwordKey }}
+                - name: REDIS_HOST
+                  value: {{ include "redis.serviceName" $root }}
+                - name: REDIS_HOST_PORT
+                  value: "6379"
+                - name: REDIS_HOST_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $root.Values.redis.credentials.name }}
+                      key: {{ $root.Values.redis.credentials.passwordKey }}
+                - name: NEXTCLOUD_DATA_DIR
+                  value: {{ $tenant.nextcloud.dataDir | default "/var/www/html/data" | quote }}
+                {{- if $tenant.s3.enabled }}
+                - name: S3_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $tenant.s3.credentials.name }}
+                      key: {{ $tenant.s3.credentials.accessKeyKey }}
+                - name: S3_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $tenant.s3.credentials.name }}
+                      key: {{ $tenant.s3.credentials.secretAccessKey }}
+                {{- end }}
+                {{- with $root.Values.cronjob.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- with $tenant.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              resources:
+                {{- toYaml $root.Values.cronjob.resources | nindent 16 }}
+              volumeMounts:
+                - name: nextcloud-html
+                  mountPath: /var/www/html
+                - name: nextcloud-data
+                  mountPath: {{ $tenant.nextcloud.dataDir | default "/var/www/html/data" }}
+          volumes:
+            {{- if $tenant.persistence.html.enabled }}
+            - name: nextcloud-html
+              persistentVolumeClaim:
+                claimName: {{ printf "nextcloud-%s-html" $tenant.name }}
+            {{- else }}
+            - name: nextcloud-html
+              emptyDir: {}
+            {{- end }}
+            {{- if $tenant.persistence.data.enabled }}
+            - name: nextcloud-data
+              persistentVolumeClaim:
+                claimName: {{ printf "nextcloud-%s-data" $tenant.name }}
+            {{- else }}
+            - name: nextcloud-data
+              emptyDir: {}
+            {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,55 @@
+╔══════════════════════════════════════════════════════════════════╗
+║           Nextcloud Multi-Tenant Chart Deployed!                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Release : {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+──────────────────────────────────────────────────────────────────
+TENANTS
+──────────────────────────────────────────────────────────────────
+{{- range .Values.tenants }}
+{{- if .enabled }}
+  ● {{ .name | upper }}
+    URL  : https://{{ .nextcloud.host }}
+    Admin: {{ .nextcloud.adminUser }}
+    DB   : {{ .database.type }}@{{ .database.host }}/{{ .database.name }}
+    Pods : {{ .replicaCount }} replica(s)
+{{- end }}
+{{- end }}
+
+──────────────────────────────────────────────────────────────────
+REDIS
+──────────────────────────────────────────────────────────────────
+{{ if .Values.redis.enabled -}}
+  Service : {{ include "redis.serviceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:6379
+  Auth    : *** see secret {{ include "redis.serviceName" . }}-secret ***
+{{- else -}}
+  Redis is disabled. Enable it in values.yaml for file locking + session cache.
+{{- end }}
+
+──────────────────────────────────────────────────────────────────
+CRON JOBS
+──────────────────────────────────────────────────────────────────
+{{ if .Values.cronjob.enabled -}}
+  Schedule: {{ .Values.cronjob.schedule }}
+  One CronJob per tenant runs occ maintenance:cron.
+{{- else -}}
+  Cron is disabled. Set cronjob.enabled=true to enable background jobs.
+{{- end }}
+
+──────────────────────────────────────────────────────────────────
+FIRST-TIME SETUP
+──────────────────────────────────────────────────────────────────
+  1. Ensure your database(s) exist and are accessible from the cluster.
+  2. Confirm your StorageClass supports ReadWriteMany (e.g. NFS, CephFS).
+  3. On first boot Nextcloud will auto-install — this can take ~60 seconds.
+  4. To run OCC manually:
+       kubectl exec -n {{ .Release.Namespace }} deploy/nextcloud-<tenant> \
+         -c nextcloud -- php occ <command>
+
+──────────────────────────────────────────────────────────────────
+SECURITY REMINDER
+──────────────────────────────────────────────────────────────────
+  ⚠  Change all default passwords in values.yaml before production!
+  ⚠  Consider using existingSecret or an External Secrets Operator.

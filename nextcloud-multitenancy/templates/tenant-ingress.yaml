@@ -1,0 +1,86 @@
+{{/*
+=============================================================================
+Tenant Ingress resources
+OpenShift: use Route when openshift.useRoutes=true, otherwise standard Ingress.
+=============================================================================
+*/}}
+{{- range .Values.tenants }}
+{{- if and .enabled .ingress.enabled }}
+{{- $tenant := . }}
+{{- $root := $ }}
+{{- if $root.Values.openshift.useRoutes }}
+---
+# ---------------------------------------------------------------------------
+# OpenShift Route (preferred over Ingress on OCP — handled by the router,
+# no nginx-ingress controller required).
+# ---------------------------------------------------------------------------
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ printf "nextcloud-%s" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+  {{- with $tenant.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  host: {{ $tenant.nextcloud.host }}
+  to:
+    kind: Service
+    name: {{ printf "nextcloud-%s" $tenant.name }}
+    weight: 100
+  port:
+    targetPort: http
+  {{- if and $tenant.ingress.tls $tenant.ingress.tls.enabled }}
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    {{- if $tenant.ingress.tls.secretName }}
+    # Reference an externally-managed TLS secret
+    # (cert-manager Certificate or manually created Secret)
+    # The router will read tls.crt / tls.key from this secret.
+    {{- end }}
+  {{- end }}
+  wildcardPolicy: None
+{{- else }}
+---
+# ---------------------------------------------------------------------------
+# Standard Kubernetes Ingress (nginx-ingress or similar)
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "nextcloud-%s" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+  {{- with $tenant.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if $tenant.ingress.className }}
+  ingressClassName: {{ $tenant.ingress.className }}
+  {{- end }}
+  {{- if and $tenant.ingress.tls $tenant.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $tenant.nextcloud.host }}
+      secretName: {{ $tenant.ingress.tls.secretName | default (printf "nextcloud-%s-tls" $tenant.name) }}
+  {{- end }}
+  rules:
+    - host: {{ $tenant.nextcloud.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "nextcloud-%s" $tenant.name }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}
+{{- end }}

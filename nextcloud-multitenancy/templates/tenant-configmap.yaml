@@ -1,0 +1,288 @@
+{{/*
+=============================================================================
+Tenant ConfigMaps:
+  1. nextcloud-<tenant>-config   — custom.config.php (Nextcloud PHP config)
+  2. nextcloud-<tenant>-phpfpm   — PHP-FPM www.conf pool config
+  3. nextcloud-<tenant>-nginx    — Nginx server block config
+=============================================================================
+*/}}
+{{- range .Values.tenants }}
+{{- if .enabled }}
+{{- $tenant := . }}
+{{- $root := $ }}
+---
+# ---------------------------------------------------------------------------
+# 1. Nextcloud custom PHP configuration
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "nextcloud-%s-config" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+data:
+  custom.config.php: |
+    <?php
+    $CONFIG = [
+      // -- Instance identity --
+      'instanceid'        => {{ printf "nc-%s" $tenant.name | quote }},
+      'trusted_domains'   => [{{ $tenant.nextcloud.host | quote }}],
+      'overwrite.cli.url' => {{ printf "https://%s" $tenant.nextcloud.host | quote }},
+      'htaccess.RewriteBase' => '/',
+
+      // -- Database --
+      'dbtype'     => {{ $tenant.database.type | quote }},
+      'dbhost'     => {{ printf "%s:%v" $tenant.database.host ($tenant.database.port | default 3306) | quote }},
+      'dbname'     => {{ $tenant.database.name | quote }},
+      'dbuser'     => {{ $tenant.database.user | quote }},
+      // dbpassword injected from secret at runtime via MYSQL_PASSWORD env
+
+      // -- Redis session & file locking --
+      'memcache.local'       => '\OC\Memcache\Redis',
+      'memcache.locking'     => '\OC\Memcache\Redis',
+      'memcache.distributed' => '\OC\Memcache\Redis',
+      'redis' => [
+        'host'     => '{{ include "redis.serviceName" $root }}',
+        'port'     => 6379,
+        // password injected from REDIS_HOST_PASSWORD env — see auto-config hook
+      ],
+
+      // -- Performance --
+      'default_phone_region'   => 'US',
+      'enable_previews'        => true,
+      'preview_max_x'          => 2048,
+      'preview_max_y'          => 2048,
+      'jpeg_quality'           => 75,
+      'skeletondirectory'      => '',
+      'tempdirectory'          => '/tmp',
+
+      // -- Logging --
+      'loglevel'    => 1,
+      'logfile'     => '/dev/stderr',
+      'log_type'    => 'errorlog',
+
+      // -- Background jobs --
+      'backgroundjobs_mode' => 'cron',
+
+      // -- Maintenance --
+      'maintenance'   => false,
+      'check_for_working_webserver_requests' => false,
+      {{- if $tenant.s3.enabled }}
+
+      // -- S3 Primary Object Storage --
+      // All user files are stored in S3. The local data dir is used only
+      // for temp files and the Nextcloud filecache database.
+      'objectstore' => [
+        'class'     => '\OC\Files\ObjectStore\S3',
+        'arguments' => [
+          'bucket'          => {{ $tenant.s3.bucket | quote }},
+          'region'          => {{ $tenant.s3.region | quote }},
+          {{- if $tenant.s3.endpoint }}
+          'hostname'        => {{ $tenant.s3.endpoint | quote }},
+          'port'            => 443,
+          'use_ssl'         => true,
+          {{- end }}
+          'use_path_style'  => {{ $tenant.s3.usePathStyle | default false }},
+          'autocreate'      => false,
+          'verify_bucket_exists' => true,
+          // Credentials are injected at runtime from the Secret via env vars:
+          // AWS_ACCESS_KEY_ID  → objectstore.arguments.key
+          // AWS_SECRET_ACCESS_KEY → objectstore.arguments.secret
+          'key'             => getenv('S3_ACCESS_KEY'),
+          'secret'          => getenv('S3_SECRET_KEY'),
+          {{- if $tenant.s3.uploadPartSize }}
+          'uploadPartSize'  => {{ $tenant.s3.uploadPartSize }},
+          {{- end }}
+          {{- if $tenant.s3.sse }}
+          'sse'             => {{ $tenant.s3.sse | quote }},
+          {{- end }}
+        ],
+      ],
+      {{- end }}
+    ];
+---
+# ---------------------------------------------------------------------------
+# 2. PHP-FPM pool configuration
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "nextcloud-%s-phpfpm" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+data:
+  www.conf: |
+    [www]
+    user  = www-data
+    group = www-data
+
+    listen = 127.0.0.1:9000
+
+    pm                   = {{ $tenant.phpFpm.pm | default "dynamic" }}
+    pm.max_children      = {{ $tenant.phpFpm.maxChildren | default 20 }}
+    pm.start_servers     = {{ $tenant.phpFpm.startServers | default 5 }}
+    pm.min_spare_servers = {{ $tenant.phpFpm.minSpareServers | default 5 }}
+    pm.max_spare_servers = {{ $tenant.phpFpm.maxSpareServers | default 10 }}
+    pm.max_requests      = {{ $tenant.phpFpm.maxRequests | default 500 }}
+
+    ; Pass environment variables from the container
+    clear_env = no
+
+    ; Logging
+    access.log = /dev/stdout
+    php_admin_value[error_log] = /dev/stderr
+    php_admin_flag[log_errors] = on
+
+    ; Health check endpoint (used by liveness/readiness probes)
+    ping.path = /fpm-ping
+    ping.response = pong
+    pm.status_path = /fpm-status
+---
+# ---------------------------------------------------------------------------
+# 3. Nginx configuration for this tenant
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "nextcloud-%s-nginx" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+data:
+  nginx.conf: |
+    worker_processes  {{ $root.Values.nginx.workerProcesses | default "auto" }};
+    error_log  /dev/stderr warn;
+    pid        /tmp/nginx.pid;
+
+    events {
+        worker_connections {{ $root.Values.nginx.workerConnections | default 1024 }};
+        use epoll;
+        multi_accept on;
+    }
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent"';
+        access_log  /dev/stdout  main;
+
+        sendfile        on;
+        tcp_nopush      on;
+        tcp_nodelay     on;
+        keepalive_timeout 65;
+        server_tokens off;
+
+        # Temp paths that a non-root nginx can write to
+        client_body_temp_path /tmp/client_body;
+        proxy_temp_path       /tmp/proxy;
+        fastcgi_temp_path     /tmp/fastcgi;
+        uwsgi_temp_path       /tmp/uwsgi;
+        scgi_temp_path        /tmp/scgi;
+
+        # Gzip
+        gzip on;
+        gzip_types text/plain application/xml application/json text/css application/javascript;
+        gzip_min_length 1024;
+
+        upstream php-handler {
+            server 127.0.0.1:9000;
+        }
+
+        server {
+            listen 8080;
+            server_name {{ $tenant.nextcloud.host }} _;
+
+            root /var/www/html;
+            index index.php index.html;
+
+            client_max_body_size {{ $root.Values.nginx.clientMaxBodySize | default "10G" }};
+            client_body_timeout  3600s;
+            client_header_timeout 3600s;
+            fastcgi_read_timeout  3600s;
+
+            # Health check (no auth)
+            location /nginx-health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+
+            # Security headers
+            add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header Referrer-Policy "no-referrer" always;
+            add_header Permissions-Policy "interest-cohort=()" always;
+
+            # HSTS preloading
+            add_header X-Robots-Tag "noindex, nofollow" always;
+
+            # Remove X-Powered-By
+            fastcgi_hide_header X-Powered-By;
+
+            # Disable access to sensitive files
+            location ~ /\. { deny all; }
+            location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)/ { deny all; }
+            location ~ ^/(?:autotest|occ|issue|indie|db_|console) { deny all; }
+
+            # Well-known redirects
+            location = /.well-known/carddav { return 301 /remote.php/dav; }
+            location = /.well-known/caldav  { return 301 /remote.php/dav; }
+            location /.well-known/acme-challenge { root /var/www/html; try_files $uri =404; }
+
+            # DAV
+            location ~ ^/remote/(.*)$ {
+                return 301 /remote.php$request_uri;
+            }
+
+            # PHP
+            location ~ \.php(?:$|/) {
+                fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+                set $path_info $fastcgi_path_info;
+                try_files $fastcgi_script_name =404;
+
+                include fastcgi_params;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                fastcgi_param PATH_INFO $path_info;
+                fastcgi_param HTTPS on;
+                fastcgi_param modHeadersAvailable true;
+                fastcgi_param front_controller_active true;
+
+                fastcgi_pass php-handler;
+
+                fastcgi_intercept_errors on;
+                fastcgi_request_buffering off;
+                fastcgi_max_temp_file_size 0;
+            }
+
+            # Static assets
+            location ~ \.(?:css|js|svg|gif|png|jpg|ico|wasm|tflite|map)$ {
+                try_files $uri /index.php$request_uri;
+                add_header Cache-Control "public, max-age=15778463";
+                access_log off;
+            }
+            location ~ \.woff2?$ {
+                try_files $uri /index.php$request_uri;
+                add_header Cache-Control "public, max-age=604800";
+                access_log off;
+            }
+
+            # Catch-all
+            location / {
+                try_files $uri $uri/ /index.php$request_uri;
+            }
+
+            {{- if $root.Values.nginx.extraConfig }}
+            # -- Extra config --
+            {{ $root.Values.nginx.extraConfig | nindent 12 }}
+            {{- end }}
+        }
+    }
+{{- end }}
+{{- end }}

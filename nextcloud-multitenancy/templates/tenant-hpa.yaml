@@ -1,0 +1,52 @@
+{{/*
+=============================================================================
+Tenant HorizontalPodAutoscalers (optional, per-tenant)
+=============================================================================
+*/}}
+{{- range .Values.tenants }}
+{{- if and .enabled .autoscaling.enabled }}
+{{- $tenant := . }}
+{{- $root := $ }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ printf "nextcloud-%s" $tenant.name | trunc 63 }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "nextcloud-%s" $tenant.name | trunc 63 }}
+  minReplicas: {{ $tenant.autoscaling.minReplicas }}
+  maxReplicas: {{ $tenant.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $tenant.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}
+{{- end }}

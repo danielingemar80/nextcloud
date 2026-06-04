@@ -1,0 +1,60 @@
+{{/*
+=============================================================================
+Tenant PersistentVolumeClaims
+  - nextcloud-<tenant>-html  (shared nextcloud root, ReadWriteMany)
+  - nextcloud-<tenant>-data  (user data, ReadWriteMany)
+=============================================================================
+*/}}
+{{- range .Values.tenants }}
+{{- if .enabled }}
+{{- $tenant := . }}
+{{- $root := $ }}
+
+{{- if $tenant.persistence.html.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "nextcloud-%s-html" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: "keep"
+spec:
+  accessModes:
+    - {{ $tenant.persistence.html.accessMode | default "ReadWriteMany" }}
+  resources:
+    requests:
+      storage: {{ $tenant.persistence.html.size }}
+  {{- $sc := coalesce $tenant.persistence.html.storageClass $root.Values.global.storageClass "" }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+
+{{- if $tenant.persistence.data.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "nextcloud-%s-data" $tenant.name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "nextcloud.labels" (dict "root" $root "tenant" $tenant) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: "keep"
+spec:
+  accessModes:
+    - {{ $tenant.persistence.data.accessMode | default "ReadWriteMany" }}
+  resources:
+    requests:
+      storage: {{ $tenant.persistence.data.size }}
+  {{- $sc := coalesce $tenant.persistence.data.storageClass $root.Values.global.storageClass "" }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+
+{{- end }}
+{{- end }}

@@ -1,0 +1,48 @@
+{{- if .Values.redis.enabled }}
+# =============================================================================
+# Redis — Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "redis.serviceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+  selector:
+    {{- include "redis.selectorLabels" . | nindent 4 }}
+---
+# =============================================================================
+# Redis — ConfigMap
+# Password is read at runtime from the externally-managed Secret:
+#   {{ .Values.redis.credentials.name }} / {{ .Values.redis.credentials.passwordKey }}
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis.serviceName" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    maxmemory {{ .Values.redis.config.maxmemory | default "200mb" }}
+    maxmemory-policy {{ .Values.redis.config.maxmemoryPolicy | default "allkeys-lru" }}
+    appendonly {{ .Values.redis.config.appendonly | default "yes" }}
+    save 900 1
+    save 300 10
+    save 60 10000
+    loglevel notice
+    protected-mode yes
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+{{- end }}

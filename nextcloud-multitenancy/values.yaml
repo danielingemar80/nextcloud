@@ -1,0 +1,296 @@
+# =============================================================================
+# Nextcloud Multi-Tenant Helm Chart — values.yaml
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Global settings shared across all tenant instances
+# ---------------------------------------------------------------------------
+global:
+  imagePullSecrets: []
+  storageClass: ""
+
+# ---------------------------------------------------------------------------
+# OpenShift-specific toggles
+# ---------------------------------------------------------------------------
+openshift:
+  # Set true when deploying on OpenShift.
+  # Effects:
+  #   - Renders Route objects instead of Ingress resources
+  #   - Omits hardcoded runAsUser/fsGroup from all securityContexts
+  #     (OCP injects a UID from the project UID range automatically)
+  #   - Grants restricted-v2 SCC to the chart's ServiceAccount
+  useRoutes: true
+
+# ---------------------------------------------------------------------------
+# Nextcloud application image
+# ---------------------------------------------------------------------------
+image:
+  repository: nextcloud
+  tag: "33-fpm"
+  pullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------------------
+# Nginx sidecar image (reverse proxy in front of PHP-FPM)
+# ---------------------------------------------------------------------------
+nginx:
+  image:
+    repository: nginx
+    tag: "1.25-alpine"
+    pullPolicy: IfNotPresent
+  workerProcesses: auto
+  workerConnections: 1024
+  clientMaxBodySize: "10G"
+  extraConfig: ""
+
+# ---------------------------------------------------------------------------
+# Redis (session cache + file locking)
+# ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7.2-alpine"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  config:
+    maxmemory: "200mb"
+    maxmemoryPolicy: "allkeys-lru"
+    appendonly: "yes"
+  credentials:
+    name: nextcloud-redis-env
+    passwordKey: REDIS_PASSWORD
+
+# ---------------------------------------------------------------------------
+# Cron job settings (runs occ maintenance:cron on a schedule)
+# ---------------------------------------------------------------------------
+cronjob:
+  enabled: true
+  schedule: "*/5 * * * *"
+  image:
+    repository: nextcloud
+    tag: "33-fpm"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  extraEnv: []
+
+# ---------------------------------------------------------------------------
+# TENANTS
+# ---------------------------------------------------------------------------
+tenants:
+  - name: acme
+    enabled: true
+
+    nextcloud:
+      host: cloud.acme.example.com
+      adminUser: admin
+      dataDir: /var/www/html/data
+      credentials:
+        name: nextcloud-acme-env
+        adminPasswordKey: NEXTCLOUD_ADMIN_PASSWORD
+
+    phpFpm:
+      pm: dynamic
+      maxChildren: 20
+      startServers: 5
+      minSpareServers: 5
+      maxSpareServers: 10
+      maxRequests: 500
+
+    replicaCount: 2
+
+    autoscaling:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+
+    database:
+      type: mysql
+      host: acme-mysql.databases.svc.cluster.local
+      port: 3306
+      name: nextcloud
+      user: nextcloud
+      credentials:
+        name: nextcloud-acme-env
+        passwordKey: DB_PASSWORD
+
+    s3:
+      enabled: true
+      bucket: acme-nextcloud-data
+      region: eu-west-1
+      endpointURL: ""
+      usePathStyle: false
+      sse: ""
+      uploadPartSize: 52428800
+      credentials:
+        name: nextcloud-acme-env
+        accessKeyKey: OBJECTSTORE_KEY
+        secretAccessKey: OBJECTSTORE_SECRET
+
+    persistence:
+      data:
+        enabled: true
+        size: 10Gi
+        storageClass: ""
+        accessMode: ReadWriteMany
+      html:
+        enabled: true
+        size: 10Gi
+        storageClass: ""
+        accessMode: ReadWriteMany
+
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+    ingress:
+      enabled: true
+      className: nginx
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-body-size: "10G"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      tls:
+        enabled: true
+        secretName: acme-tls
+
+    extraEnv: []
+    phpConfig: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+
+  # ---------------------------------------------------------------------------
+  - name: globex
+    enabled: true
+
+    nextcloud:
+      host: cloud.globex.example.com
+      adminUser: admin
+      dataDir: /var/www/html/data
+      credentials:
+        name: nextcloud-globex-env
+        adminPasswordKey: NEXTCLOUD_ADMIN_PASSWORD
+
+    phpFpm:
+      pm: dynamic
+      maxChildren: 10
+      startServers: 3
+      minSpareServers: 3
+      maxSpareServers: 6
+      maxRequests: 500
+
+    replicaCount: 1
+
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+
+    database:
+      type: pgsql
+      host: globex-postgres.databases.svc.cluster.local
+      port: 5432
+      name: nextcloud
+      user: nextcloud
+      credentials:
+        name: nextcloud-globex-env
+        passwordKey: DB_PASSWORD
+
+    s3:
+      enabled: true
+      bucket: globex-nextcloud-data
+      region: eu-west-1
+      endpointURL: ""
+      usePathStyle: false
+      sse: ""
+      uploadPartSize: 52428800
+      credentials:
+        name: nextcloud-globex-env
+        accessKeyKey: OBJECTSTORE_KEY
+        secretAccessKey: OBJECTSTORE_SECRET
+
+    persistence:
+      data:
+        enabled: true
+        size: 10Gi
+        storageClass: ""
+        accessMode: ReadWriteMany
+      html:
+        enabled: true
+        size: 10Gi
+        storageClass: ""
+        accessMode: ReadWriteMany
+
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+    ingress:
+      enabled: true
+      className: nginx
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-body-size: "5G"
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      tls:
+        enabled: true
+        secretName: globex-tls
+
+    extraEnv: []
+    phpConfig: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+
+# ---------------------------------------------------------------------------
+# Service account
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ---------------------------------------------------------------------------
+# Pod security context
+# NOTE: runAsUser / fsGroup are intentionally omitted here.
+# On OpenShift, the platform assigns a UID from the project's UID range.
+# On vanilla Kubernetes you can re-add them if your images require it.
+# ---------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
