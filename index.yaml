@@ -1,0 +1,28 @@
+apiVersion: v1
+entries:
+  nextcloud-multitenancy:
+    - apiVersion: v2
+      name: nextcloud-multitenancy
+      description: Production-grade Nextcloud Helm chart with Redis, Nginx reverse
+        proxy, background cron jobs, and multi-tenant customer isolation support.
+      type: application
+      version: 1.0.0
+      appVersion: "33.0.0"
+      keywords:
+        - nextcloud
+        - storage
+        - cloud
+        - multi-tenant
+      home: https://nextcloud.com
+      sources:
+        - https://github.com/nextcloud/docker
+      maintainers:
+        - name: Platform Team
+          email: platform@example.com
+      annotations:
+        category: Storage
+      urls:
+        - https://raw.githubusercontent.com/danielingemar80/nextcloud/main/nextcloud-multitenancy-1.0.0.tgz
+      digest: 0c5e6b58602b3414f17fff3b933c33244a4cd4924a2ea37ef38f62e4a9715679
+      created: "2026-06-04T11:06:32Z"
+generated: "2026-06-04T11:06:32Z"
