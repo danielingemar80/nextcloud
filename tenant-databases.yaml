@@ -1,0 +1,175 @@
+# =============================================================================
+# Per-tenant MySQL databases — sandbox convenience manifest
+# In production these would be external managed databases.
+# Each tenant gets a completely isolated MySQL StatefulSet + Service + Secret.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ACME — MySQL
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: acme-mysql-secret
+  namespace: danielingemar-dev
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "acme-root-changeme"
+  MYSQL_PASSWORD: "acme-db-changeme"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acme-mysql
+  namespace: danielingemar-dev
+  labels:
+    app: acme-mysql
+spec:
+  type: ClusterIP
+  selector:
+    app: acme-mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: acme-mysql
+  namespace: danielingemar-dev
+  labels:
+    app: acme-mysql
+spec:
+  serviceName: acme-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: acme-mysql
+  template:
+    metadata:
+      labels:
+        app: acme-mysql
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: acme-mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: nextcloud
+            - name: MYSQL_USER
+              value: nextcloud
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: acme-mysql-secret
+                  key: MYSQL_PASSWORD
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: acme-mysql-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: acme-mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+# -----------------------------------------------------------------------------
+# GLOBEX — MySQL
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: globex-mysql-secret
+  namespace: danielingemar-dev
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "globex-root-changeme"
+  MYSQL_PASSWORD: "globex-db-changeme"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: globex-mysql
+  namespace: danielingemar-dev
+  labels:
+    app: globex-mysql
+spec:
+  type: ClusterIP
+  selector:
+    app: globex-mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: globex-mysql
+  namespace: danielingemar-dev
+  labels:
+    app: globex-mysql
+spec:
+  serviceName: globex-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: globex-mysql
+  template:
+    metadata:
+      labels:
+        app: globex-mysql
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: globex-mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: nextcloud
+            - name: MYSQL_USER
+              value: nextcloud
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: globex-mysql-secret
+                  key: MYSQL_PASSWORD
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: globex-mysql-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: globex-mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
