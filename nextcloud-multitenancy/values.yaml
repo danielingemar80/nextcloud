@@ -149,12 +149,12 @@ tenants:
         enabled: true
         size: 10Gi
         storageClass: ""
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
       html:
         enabled: true
         size: 10Gi
         storageClass: ""
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
 
     resources:
       requests:
@@ -239,12 +239,12 @@ tenants:
         enabled: true
         size: 10Gi
         storageClass: ""
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
       html:
         enabled: true
         size: 10Gi
         storageClass: ""
-        accessMode: ReadWriteMany
+        accessMode: ReadWriteOnce
 
     resources:
       requests:
