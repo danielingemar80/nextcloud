@@ -1,0 +1,185 @@
+# =============================================================================
+# Nextcloud Multi-Tenant — OpenShift Sandbox values
+# Single tenant: danielingemar, MySQL backend, Redis enabled
+# =============================================================================
+
+global:
+  imagePullSecrets: []
+  storageClass: ""          # sandbox uses default StorageClass
+
+# ---------------------------------------------------------------------------
+# OpenShift — use Routes instead of Ingress
+# ---------------------------------------------------------------------------
+openshift:
+  useRoutes: true
+
+# ---------------------------------------------------------------------------
+# Nextcloud image
+# ---------------------------------------------------------------------------
+image:
+  repository: nextcloud
+  tag: "33-fpm"
+  pullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------------------
+# Nginx sidecar
+# ---------------------------------------------------------------------------
+nginx:
+  image:
+    repository: nginx
+    tag: "1.25-alpine"
+    pullPolicy: IfNotPresent
+  workerProcesses: "1"
+  workerConnections: 512
+  clientMaxBodySize: "5G"
+
+# ---------------------------------------------------------------------------
+# Redis — enabled, lightweight for sandbox
+# ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7.2-alpine"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  config:
+    maxmemory: "100mb"
+    maxmemoryPolicy: "allkeys-lru"
+    appendonly: "yes"
+  credentials:
+    name: nextcloud-redis-env       # Secret must exist before install
+    passwordKey: REDIS_PASSWORD
+
+# ---------------------------------------------------------------------------
+# Cron job
+# ---------------------------------------------------------------------------
+cronjob:
+  enabled: true
+  schedule: "*/5 * * * *"
+  image:
+    repository: nextcloud
+    tag: "33-fpm"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  extraEnv: []
+
+# ---------------------------------------------------------------------------
+# TENANT: danielingemar
+# ---------------------------------------------------------------------------
+tenants:
+  - name: danielingemar
+    enabled: true
+
+    nextcloud:
+      # Replace <SANDBOX_DOMAIN> with your actual sandbox app domain.
+      # Find it with: oc get routes -n danielingemar-dev
+      # It typically looks like: <something>.apps.sandbox-xxxx.openshiftapps.com
+      host: nextcloud.danielingemar-dev.apps.rm1.0a51.p1.openshiftapps.com
+      adminUser: admin
+      dataDir: /var/www/html/data
+      credentials:
+        name: nextcloud-danielingemar-env   # created by 01-create-secrets.sh
+        adminPasswordKey: NEXTCLOUD_ADMIN_PASSWORD
+
+    phpFpm:
+      pm: dynamic
+      maxChildren: 10
+      startServers: 2
+      minSpareServers: 2
+      maxSpareServers: 5
+      maxRequests: 300
+
+    replicaCount: 1
+
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPUUtilizationPercentage: 70
+
+    database:
+      type: mysql
+      host: mysql.danielingemar-dev.svc.cluster.local   # in-cluster MySQL service
+      port: 3306
+      name: nextcloud
+      user: nextcloud
+      credentials:
+        name: nextcloud-danielingemar-env
+        passwordKey: DB_PASSWORD
+
+    s3:
+      enabled: false    # disabled — using PVC storage
+
+    persistence:
+      data:
+        enabled: true
+        size: 5Gi
+        storageClass: ""
+        accessMode: ReadWriteOnce   # sandbox typically only supports RWO
+      html:
+        enabled: true
+        size: 5Gi
+        storageClass: ""
+        accessMode: ReadWriteOnce
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    ingress:
+      enabled: true     # enables Route (because openshift.useRoutes=true)
+      className: ""
+      annotations: {}
+      tls:
+        enabled: true
+        secretName: ""  # OpenShift router handles TLS automatically on sandbox
+
+    extraEnv: []
+    phpConfig: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+
+# ---------------------------------------------------------------------------
+# Service account
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ---------------------------------------------------------------------------
+# Pod security — OpenShift injects UID, so no runAsUser here
+# ---------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
