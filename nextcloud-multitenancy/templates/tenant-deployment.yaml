@@ -192,6 +192,10 @@ spec:
         - name: nginx
           image: "{{ $root.Values.nginx.image.repository }}:{{ $root.Values.nginx.image.tag }}"
           imagePullPolicy: {{ $root.Values.nginx.image.pullPolicy }}
+          command:                  
+            - nginx                 
+            - -g                     
+            - "daemon off;"          
           # OpenShift: no runAsUser — OCP assigns UID; no NET_BIND_SERVICE needed
           # because we listen on 8080, not 80.
           securityContext:
