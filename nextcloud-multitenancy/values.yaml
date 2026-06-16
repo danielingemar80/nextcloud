@@ -62,7 +62,7 @@ redis:
   persistence:
     enabled: true
     size: 2Gi
-    storageClass: ""
+    storageClass: "efs-sc"
   config:
     maxmemory: "200mb"
     maxmemoryPolicy: "allkeys-lru"
@@ -148,12 +148,12 @@ tenants:
       data:
         enabled: true
         size: 10Gi
-        storageClass: ""
+        storageClass: "efs-sc"
         accessMode: ReadWriteOnce
       html:
         enabled: true
         size: 10Gi
-        storageClass: ""
+        storageClass: "efs-sc"
         accessMode: ReadWriteOnce
 
     resources:
@@ -238,12 +238,12 @@ tenants:
       data:
         enabled: true
         size: 10Gi
-        storageClass: ""
+        storageClass: "efs-sc"
         accessMode: ReadWriteOnce
       html:
         enabled: true
         size: 10Gi
-        storageClass: ""
+        storageClass: "efs-sc"
         accessMode: ReadWriteOnce
 
     resources:
