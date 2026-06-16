@@ -100,22 +100,22 @@ spec:
                 - name: nextcloud-data
                   mountPath: {{ $tenant.nextcloud.dataDir | default "/var/www/html/data" }}
           volumes:
-            {{- if $tenant.persistence.html.enabled }}
-            - name: nextcloud-html
-              persistentVolumeClaim:
-                claimName: {{ printf "nextcloud-%s-html" $tenant.name }}
-            {{- else }}
+#            {{- if $tenant.persistence.html.enabled }}
+#            - name: nextcloud-html
+#              persistentVolumeClaim:
+#                claimName: {{ printf "nextcloud-%s-html" $tenant.name }}
+#            {{- else }}
             - name: nextcloud-html
               emptyDir: {}
-            {{- end }}
-            {{- if $tenant.persistence.data.enabled }}
-            - name: nextcloud-data
-              persistentVolumeClaim:
-                claimName: {{ printf "nextcloud-%s-data" $tenant.name }}
-            {{- else }}
+#            {{- end }}
+#            {{- if $tenant.persistence.data.enabled }}
+#            - name: nextcloud-data
+#              persistentVolumeClaim:
+#                claimName: {{ printf "nextcloud-%s-data" $tenant.name }}
+#            {{- else }}
             - name: nextcloud-data
               emptyDir: {}
-            {{- end }}
+#            {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
