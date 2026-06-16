@@ -1,0 +1,151 @@
+# =============================================================================
+# Override values for OpenShift Sandbox
+# Usage: helm install nextcloud-acme ./nextcloud-multitenancy-1.0.0.tgz \
+#          -n danielingemar-dev -f override-values.yaml
+# =============================================================================
+
+openshift:
+  useRoutes: true
+
+redis:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+  credentials:
+    name: nextcloud-redis-env
+    passwordKey: REDIS_PASSWORD
+
+tenants:
+  - name: acme
+    enabled: true
+    nextcloud:
+      host: nextcloud-acme.danielingemar-dev.apps.rm1.0a51.p1.openshiftapps.com
+      adminUser: admin
+      dataDir: /var/www/html/data
+      credentials:
+        name: nextcloud-acme-env
+        adminPasswordKey: NEXTCLOUD_ADMIN_PASSWORD
+    phpFpm:
+      pm: dynamic
+      maxChildren: 10
+      startServers: 2
+      minSpareServers: 2
+      maxSpareServers: 5
+      maxRequests: 300
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPUUtilizationPercentage: 70
+    database:
+      type: mysql
+      host: acme-mysql.danielingemar-dev.svc.cluster.local
+      port: 3306
+      name: nextcloud
+      user: nextcloud
+      credentials:
+        name: nextcloud-acme-env
+        passwordKey: DB_PASSWORD
+    s3:
+      enabled: false
+    persistence:
+      data:
+        enabled: true
+        size: 5Gi
+        accessMode: ReadWriteOnce
+      html:
+        enabled: true
+        size: 5Gi
+        accessMode: ReadWriteOnce
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    ingress:
+      enabled: true
+      className: ""
+      annotations: {}
+      tls:
+        enabled: true
+        secretName: ""
+    extraEnv: []
+    phpConfig: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+
+  - name: globex
+    enabled: false   # disabled for now, enable when ready
+    nextcloud:
+      host: nextcloud-globex.danielingemar-dev.apps.rm1.0a51.p1.openshiftapps.com
+      adminUser: admin
+      dataDir: /var/www/html/data
+      credentials:
+        name: nextcloud-globex-env
+        adminPasswordKey: NEXTCLOUD_ADMIN_PASSWORD
+    phpFpm:
+      pm: dynamic
+      maxChildren: 10
+      startServers: 2
+      minSpareServers: 2
+      maxSpareServers: 5
+      maxRequests: 300
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPUUtilizationPercentage: 70
+    database:
+      type: pgsql
+      host: globex-mysql.danielingemar-dev.svc.cluster.local
+      port: 5432
+      name: nextcloud
+      user: nextcloud
+      credentials:
+        name: nextcloud-globex-env
+        passwordKey: DB_PASSWORD
+    s3:
+      enabled: false
+    persistence:
+      data:
+        enabled: true
+        size: 5Gi
+        accessMode: ReadWriteOnce
+      html:
+        enabled: true
+        size: 5Gi
+        accessMode: ReadWriteOnce
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    ingress:
+      enabled: true
+      className: ""
+      annotations: {}
+      tls:
+        enabled: true
+        secretName: ""
+    extraEnv: []
+    phpConfig: {}
+    podAnnotations: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
